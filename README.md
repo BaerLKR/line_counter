@@ -12,3 +12,8 @@ You can also provide the **-s** flag if you want empty lines to be ignored:
 
     lc -s
 
+
+You can also specify the directory or file:
+
+    lc <FILE_PATH>
+    
