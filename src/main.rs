@@ -10,7 +10,7 @@ use thiserror::Error;
 #[clap(author, version, about)]
 struct Args {
     /// The path of the file or directory of which the lines should be counted
-    file_name: String,
+    file_path: String,
 
     /// Skip empty lines
     #[clap(short, takes_value=false)]
@@ -31,14 +31,14 @@ fn main() -> Result<()> {
     let mut lines: usize = 0;
 
     let args = Args::parse();
-    let file_name = args.file_name;
+    let file_path = args.file_path;
 
-    let is_dir = std::fs::metadata(&file_name)?.is_dir();
+    let is_dir = std::fs::metadata(&file_path)?.is_dir();
 
     if is_dir {
-        lines = get_dir_lines(&file_name, args.skip_empty_lines, 0)?;
+        lines = get_dir_lines(&file_path, args.skip_empty_lines, 0)?;
     } else {
-        let mut file = File::open(&file_name)?;
+        let mut file = File::open(&file_path)?;
         let mut buffer = String::new();
 
         file.read_to_string(&mut buffer)?;
@@ -63,7 +63,7 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn get_dir_lines(file_name: &str, skip_empty_lines: bool, depth: usize) -> Result<usize> {
+fn get_dir_lines(file_path: &str, skip_empty_lines: bool, depth: usize) -> Result<usize> {
     let mut lines = 0;
     let mut indenting = String::new();
 
@@ -73,8 +73,8 @@ fn get_dir_lines(file_name: &str, skip_empty_lines: bool, depth: usize) -> Resul
         indenting += "  ";
     }
 
-    println!("{}{}:", indenting, file_name);
-    for entry in std::fs::read_dir(&file_name)? {
+    println!("{}{}:", indenting, file_path);
+    for entry in std::fs::read_dir(&file_path)? {
         let entry = entry?;
 
         if entry.metadata()?.is_dir() {
