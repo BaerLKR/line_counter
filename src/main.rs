@@ -5,6 +5,7 @@ use std::{
 
 use clap::Parser;
 use thiserror::Error;
+
 #[derive(Parser, Debug)]
 #[clap(author, version, about)]
 struct Args {
@@ -87,7 +88,6 @@ fn get_dir_lines(file_path: &str, skip_empty_lines: bool, depth: usize) -> Resul
         file.read_to_string(&mut buffer)?;
         let mut current_lines = 0_usize;
         
-
         if skip_empty_lines {
             for line in buffer.lines() {
                 if !line.trim().is_empty() {
