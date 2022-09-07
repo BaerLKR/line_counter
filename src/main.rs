@@ -119,6 +119,7 @@ fn get_dir_lines(file_path: &str, args: &Args, depth: usize) -> Result<usize> {
         if entry.metadata()?.is_dir() {
             if args.recursive {
                 maybe_dirs.push(entry);
+                
             }
             continue;
         } 
