@@ -113,7 +113,6 @@ fn get_dir_lines(file_path: &str, args: &Args, depth: usize) -> Result<usize> {
             if file_name == *ignored {
                 continue 'outer;
             }
-        
         }
 
         if entry.metadata()?.is_dir() {
