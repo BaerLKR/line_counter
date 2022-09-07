@@ -15,6 +15,39 @@ struct Args {
     /// Skip empty lines
     #[clap(short, takes_value=false)]
     skip_empty_lines: bool,
+
+    /// Enable the recursive flag. 
+    /// line_counter will count lines in subdirectories recursively
+    #[clap(short, long, takes_value=false)]
+    recursive: bool,
+
+    /// To ignore files completely add a ".ignore.lc" file to the directory and write down the files that should be ignored.
+    ignored: Vec<String>,
+
+
+}
+
+impl Args {
+    /// Checks if a ".ignore.lc" file is within the directory, and adds them to the ignored_vec.
+    fn with_ignored(mut self) -> Result<Self> {
+        if !std::fs::metadata(&self.file_path)?.is_dir() {
+            return Ok(self);
+        }
+        for entry in std::fs::read_dir(&self.file_path)?.flatten() {
+            if entry.file_name() == ".ignore.lc" {
+                let mut f = File::open(entry.path())?;
+
+                let mut ignored = String::new();
+                f.read_to_string(&mut ignored)?;
+
+                self.ignored = ignored.lines().map(|line| line.trim().to_string()).collect();
+                self.ignored.push(String::from(".ignore.lc"));
+                
+            }
+        }
+        Ok(self)
+    }
+
 }
 
 #[derive(Debug, Error)]
@@ -28,17 +61,16 @@ enum Error {
 
 type Result<T> = std::result::Result<T, Error>;
 fn main() -> Result<()> {
+    let args = Args::parse().with_ignored()?;
+    
+    let file_metadata = std::fs::metadata(&args.file_path)?;
+    
     let mut lines: usize = 0;
+    if file_metadata.is_dir() {        
+        lines = get_dir_lines(&args.file_path, &args, 0)?;
 
-    let args = Args::parse();
-    let file_path = args.file_path;
-
-    let is_dir = std::fs::metadata(&file_path)?.is_dir();
-
-    if is_dir {
-        lines = get_dir_lines(&file_path, args.skip_empty_lines, 0)?;
     } else {
-        let mut file = File::open(&file_path)?;
+        let mut file = File::open(&args.file_path)?;
         let mut buffer = String::new();
 
         file.read_to_string(&mut buffer)?;
@@ -56,14 +88,14 @@ fn main() -> Result<()> {
 
     println!(
         "\nTotal number of lines in {}: {}",
-        if is_dir { "directory" } else { "file" },
+        if file_metadata.is_dir() { "directory" } else { "file" },
         lines
     );
 
     Ok(())
 }
 
-fn get_dir_lines(file_path: &str, skip_empty_lines: bool, depth: usize) -> Result<usize> {
+fn get_dir_lines(file_path: &str, args: &Args, depth: usize) -> Result<usize> {
     let mut lines = 0;
     let mut indenting = String::new();
 
@@ -74,13 +106,22 @@ fn get_dir_lines(file_path: &str, skip_empty_lines: bool, depth: usize) -> Resul
     }
 
     println!("{}{}:", indenting, file_path);
-    for entry in std::fs::read_dir(&file_path)? {
-        let entry = entry?;
+    'outer: for entry in std::fs::read_dir(&file_path)?.flatten() {
+        // check if file should be ignored
+        let file_name = entry.file_name().to_str().ok_or(Error::FileNameError)?.to_string();
+        for ignored in &args.ignored {
+            if file_name == *ignored {
+                continue 'outer;
+            }
+        
+        }
 
         if entry.metadata()?.is_dir() {
-            maybe_dirs.push(entry);
+            if args.recursive {
+                maybe_dirs.push(entry);
+            }
             continue;
-        }
+        } 
         
         let mut file = File::open(entry.path())?;
         
@@ -88,7 +129,7 @@ fn get_dir_lines(file_path: &str, skip_empty_lines: bool, depth: usize) -> Resul
         file.read_to_string(&mut buffer)?;
         let mut current_lines = 0_usize;
         
-        if skip_empty_lines {
+        if args.skip_empty_lines {
             for line in buffer.lines() {
                 if !line.trim().is_empty() {
                     current_lines += 1;
@@ -112,7 +153,7 @@ fn get_dir_lines(file_path: &str, skip_empty_lines: bool, depth: usize) -> Resul
     for dir in maybe_dirs {
         lines += get_dir_lines(
             dir.path().to_str().ok_or(Error::FileNameError)?,
-            skip_empty_lines,
+            args,
             depth + 1,
         )?;
     }
