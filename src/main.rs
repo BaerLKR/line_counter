@@ -34,14 +34,14 @@ impl Args {
             return Ok(self);
         }
         for entry in std::fs::read_dir(&self.file_path)?.flatten() {
-            if entry.file_name() == ".ignore.lc" {
+            if entry.file_name() == ".lcignore" {
                 let mut f = File::open(entry.path())?;
 
                 let mut ignored = String::new();
                 f.read_to_string(&mut ignored)?;
 
                 self.ignored = ignored.lines().map(|line| line.trim().to_string()).collect();
-                self.ignored.push(String::from(".ignore.lc"));
+                self.ignored.push(String::from(".lcignore"));
                 
             }
         }
