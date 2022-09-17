@@ -6,7 +6,11 @@ By just running the program with
 
     lc
 
-it will count every line in the directory and subdirectories recursively.
+it will count every line in the directory.
+
+If you want to run the program recursively for the subdirectories, run it with the **-r** flag:
+
+    lc -r
 
 You can also provide the **-s** flag if you want empty lines to be ignored:
 
