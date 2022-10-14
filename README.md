@@ -6,7 +6,11 @@ By just running the program with
 
     lc
 
-it will simply print out the help information.
+it will count every line in the directory.
+
+If you want to run the program recursively for the subdirectories, run it with the **-r** flag:
+
+    lc -r
 
 In order to count lines in a directory you need to specify a path:
 
