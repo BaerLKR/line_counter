@@ -6,14 +6,13 @@ By just running the program with
 
     lc
 
-it will count every line in the directory and subdirectories recursively.
+it will simply print out the help information.
 
+In order to count lines in a directory you need to specify a path:
+
+    lc <FILE_PATH>
+    
 You can also provide the **-s** flag if you want empty lines to be ignored:
 
     lc -s
 
-
-You can also specify the directory or file:
-
-    lc <FILE_PATH>
-    
