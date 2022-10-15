@@ -13,18 +13,19 @@ struct Args {
     file_path: String,
 
     /// Skip empty lines
-    #[clap(short, takes_value=false)]
+    #[clap(short, takes_value = false)]
     skip_empty_lines: bool,
 
-    /// Enable the recursive flag. 
+    /// Enable the recursive flag.
     /// line_counter will count lines in subdirectories recursively
-    #[clap(short, long, takes_value=false)]
+    #[clap(short, long, takes_value = false)]
     recursive: bool,
+
+    #[clap(short, long, takes_value = false)]
+    count_chars: bool,
 
     /// To ignore files completely add a ".ignore.lc" file to the directory and write down the files that should be ignored.
     ignored: Vec<String>,
-
-
 }
 
 impl Args {
@@ -40,14 +41,15 @@ impl Args {
                 let mut ignored = String::new();
                 f.read_to_string(&mut ignored)?;
 
-                self.ignored = ignored.lines().map(|line| line.trim().to_string()).collect();
+                self.ignored = ignored
+                    .lines()
+                    .map(|line| line.trim().to_string())
+                    .collect();
                 self.ignored.push(String::from(".lcignore"));
-                
             }
         }
         Ok(self)
     }
-
 }
 
 #[derive(Debug, Error)]
@@ -62,41 +64,67 @@ enum Error {
 type Result<T> = std::result::Result<T, Error>;
 fn main() -> Result<()> {
     let args = Args::parse().with_ignored()?;
-    
-    let file_metadata = std::fs::metadata(&args.file_path)?;
-    
-    let mut lines: usize = 0;
-    if file_metadata.is_dir() {        
-        lines = get_dir_lines(&args.file_path, &args, 0)?;
 
+    let file_metadata = std::fs::metadata(&args.file_path)?;
+
+    let mut lines: usize = 0;
+    let mut characters = 0;
+
+    if file_metadata.is_dir() {
+        (lines, characters) = get_dir_lines(&args.file_path, &args, 0)?;
     } else {
         let mut file = File::open(&args.file_path)?;
         let mut buffer = String::new();
 
         file.read_to_string(&mut buffer)?;
-
         if args.skip_empty_lines {
             for line in buffer.lines() {
-                if line.trim().is_empty() {
+                if !line.trim().is_empty() {
                     lines += 1;
+                    if args.count_chars {
+                        characters += line.chars().count();
+                    }
                 }
             }
         } else {
             lines += buffer.lines().count();
+            if args.count_chars {
+                let _: Vec<_> = buffer
+                    .lines()
+                    .map(|x| characters += x.chars().count())
+                    .collect();
+            }
         }
     }
 
     println!(
         "\nTotal number of lines in {}: {}",
-        if file_metadata.is_dir() { "directory" } else { "file" },
+        if file_metadata.is_dir() {
+            "directory"
+        } else {
+            "file"
+        },
         lines
     );
+
+    if args.count_chars {
+        println!(
+            "Total number of characters in {}: {}",
+            if file_metadata.is_dir() {
+                "directory"
+            } else {
+                "file"
+            },
+            characters
+        );
+    }
 
     Ok(())
 }
 
-fn get_dir_lines(file_path: &str, args: &Args, depth: usize) -> Result<usize> {
+fn get_dir_lines(file_path: &str, args: &Args, depth: usize) -> Result<(usize, usize)> {
     let mut lines = 0;
+    let mut characters = 0;
     let mut indenting = String::new();
 
     let mut maybe_dirs: Vec<DirEntry> = Vec::new();
@@ -108,7 +136,11 @@ fn get_dir_lines(file_path: &str, args: &Args, depth: usize) -> Result<usize> {
     println!("{}{}:", indenting, file_path);
     'outer: for entry in std::fs::read_dir(&file_path)?.flatten() {
         // check if file should be ignored
-        let file_name = entry.file_name().to_str().ok_or(Error::FileNameError)?.to_string();
+        let file_name = entry
+            .file_name()
+            .to_str()
+            .ok_or(Error::FileNameError)?
+            .to_string();
         for ignored in &args.ignored {
             if file_name == *ignored {
                 continue 'outer;
@@ -118,45 +150,55 @@ fn get_dir_lines(file_path: &str, args: &Args, depth: usize) -> Result<usize> {
         if entry.metadata()?.is_dir() {
             if args.recursive {
                 maybe_dirs.push(entry);
-                
             }
             continue;
-        } 
-        
+        }
+
         let mut file = File::open(entry.path())?;
-        
+
         let mut buffer = String::new();
         file.read_to_string(&mut buffer)?;
-        let mut current_lines = 0_usize;
-        
+
         if args.skip_empty_lines {
             for line in buffer.lines() {
                 if !line.trim().is_empty() {
-                    current_lines += 1;
+                    lines += 1;
+                    if args.count_chars {
+                        characters += line.chars().count();
+                    }
                 }
             }
         } else {
-            current_lines += buffer.lines().count();
+            lines += buffer.lines().count();
+            if args.count_chars {
+                let _: Vec<_> = buffer
+                    .lines()
+                    .map(|line| characters += line.chars().count())
+                    .collect();
+            }
         }
 
+        dbg!(characters);
         println!(
             "{}> {}: {}",
             indenting,
             entry.file_name().to_str().ok_or(Error::FileNameError)?,
-            current_lines
+            lines
         );
-        if current_lines == 69 {
+        if lines == 69 {
             println!("  NICE!");
         }
-        lines += current_lines;
     }
     for dir in maybe_dirs {
-        lines += get_dir_lines(
+        let (tmp_lines, tmp_characters) = get_dir_lines(
             dir.path().to_str().ok_or(Error::FileNameError)?,
             args,
             depth + 1,
         )?;
+
+        lines += tmp_lines;
+        characters += tmp_characters;
     }
 
-    Ok(lines)
+    Ok((lines, characters))
 }
