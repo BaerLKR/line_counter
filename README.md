@@ -20,3 +20,6 @@ You can also provide the **-s** flag if you want empty lines to be ignored:
 
     lc -s
 
+If you provide the **-c** flag it will count all characters including newline characters (it will ignore empty lines when used with **-s**):
+
+    lc -c
