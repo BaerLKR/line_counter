@@ -1,9 +1,6 @@
-use std::{
-    fs::{DirEntry, File},
-    io::Read,
-};
-
 use clap::Parser;
+use std::fs::File;
+use std::io::Read;
 use thiserror::Error;
 
 #[derive(Parser, Debug)]
@@ -56,149 +53,142 @@ impl Args {
 enum Error {
     #[error("Error occurred while reading file")]
     LcIoError(#[from] std::io::Error),
-
-    #[error("Error occurred while parsing file name")]
-    FileNameError,
 }
 
 type Result<T> = std::result::Result<T, Error>;
+
 fn main() -> Result<()> {
     let args = Args::parse().with_ignored()?;
 
     let file_metadata = std::fs::metadata(&args.file_path)?;
 
-    let mut lines: usize = 0;
-    let mut characters = 0;
-
     if file_metadata.is_dir() {
-        (lines, characters) = get_dir_lines(&args.file_path, &args, 0)?;
-    } else {
-        let mut file = File::open(&args.file_path)?;
-        let mut buffer = String::new();
-
-        file.read_to_string(&mut buffer)?;
-        if args.skip_empty_lines {
-            for line in buffer.lines() {
-                if !line.trim().is_empty() {
-                    lines += 1;
-                    if args.count_chars {
-                        characters += line.chars().count();
-                    }
-                }
-            }
-        } else {
-            lines += buffer.lines().count();
-            if args.count_chars {
-                let _: Vec<_> = buffer
-                    .lines()
-                    .map(|x| characters += x.chars().count())
-                    .collect();
-            }
+        if let Some(d_data) = get_dir_data(&args.file_path, &args)? {
+            print_dir(&d_data, &args);
+            println!("Total lines: {total}", total = d_data.total_lines());
+            println!("Total characters: {total}", total = d_data.total_characters());
         }
-    }
-
-    println!(
-        "\nTotal number of lines in {}: {}",
-        if file_metadata.is_dir() {
-            "directory"
-        } else {
-            "file"
-        },
-        lines
-    );
-
-    if args.count_chars {
-        println!(
-            "Total number of characters in {}: {}",
-            if file_metadata.is_dir() {
-                "directory"
-            } else {
-                "file"
-            },
-            characters
-        );
+    } else {
+        let f_data = get_file_data(&args.file_path, args.skip_empty_lines)?;
+        print_file(&f_data, &args);
     }
 
     Ok(())
 }
 
-fn get_dir_lines(file_path: &str, args: &Args, depth: usize) -> Result<(usize, usize)> {
-    let mut lines = 0;
-    let mut characters = 0;
-    let mut indenting = String::new();
+fn print_file(file: &FileData, args: &Args) {
+    println!(
+        "{file_name} => {line_count} lines {chars}",
+        file_name = &file.file_name,
+        line_count = file.lines,
+        chars = if args.count_chars {
+            format!("({chars} chars)", chars = file.characters)
+        } else {
+            "".to_owned()
+        }
+    );
+}
 
-    let mut maybe_dirs: Vec<DirEntry> = Vec::new();
+fn print_dir(dir: &DirData, args: &Args) {
+    println!("{dir_name}: ", dir_name = &dir.dir_name);
+    for file in &dir.file_data {
+        print!("\t");
+        print_file(file, args);
+    }
+    for dir in &dir.sub_dirs {
+        print!("\t\t");
+        print_dir(dir, args);
+    }
+}
 
-    for _d in 0..depth {
-        indenting += "  ";
+struct FileData {
+    file_name: String,
+    lines: usize,
+    characters: usize,
+}
+
+struct DirData {
+    dir_name: String,
+    file_data: Vec<FileData>,
+    sub_dirs: Vec<DirData>,
+}
+
+impl DirData {
+    fn total_lines(&self) -> usize {
+        let mut total = 0;
+        for f in &self.file_data {
+            total += f.lines;
+        }
+        total
     }
 
-    println!("{}{}:", indenting, file_path);
-    'outer: for entry in std::fs::read_dir(&file_path)?.flatten() {
-        // check if file should be ignored
-        let file_name = entry
-            .file_name()
-            .to_str()
-            .ok_or(Error::FileNameError)?
-            .to_string();
-        for ignored in &args.ignored {
-            if file_name == *ignored {
-                continue 'outer;
+    fn total_characters(&self) -> usize {
+        let mut total = 0;
+        for f in &self.file_data {
+            total += f.characters;
+        }
+        total
+    }
+}
+
+fn get_file_data(path: impl Into<String>, skip_empty_lines: bool) -> Result<FileData> {
+    let file_name: String = path.into();
+
+    let mut f = File::open(&file_name)?;
+    let mut s = String::new();
+    f.read_to_string(&mut s)?;
+
+    let mut lines = 0;
+    let mut characters = 0;
+
+    if !skip_empty_lines {
+        lines += s.lines().count();
+    } else {
+        for line in s.lines() {
+            if !line.trim().is_empty() {
+                lines += 1;
             }
         }
+    }
 
-        if entry.metadata()?.is_dir() {
-            if args.recursive {
-                maybe_dirs.push(entry);
+    for char in s.chars() {
+        if char != '\n' || char != '\t' {
+            characters += 1;
+        }
+    }
+
+    Ok(FileData {
+        file_name,
+        lines,
+        characters,
+    })
+}
+
+fn get_dir_data(dir_path: &str, args: &Args) -> Result<Option<DirData>> {
+    let mut dir_data = DirData {
+        dir_name: dir_path.to_owned(),
+        file_data: vec![],
+        sub_dirs: vec![],
+    };
+    if args.ignored.contains(&dir_path.to_owned()) {
+        return Ok(None);
+    }
+    for entry in std::fs::read_dir(dir_path).into_iter().flatten() {
+        let Ok(entry) = entry else {
+            continue;
+        };
+        if args.recursive && entry.metadata()?.is_dir() {
+            if let Some(data) = get_dir_data(entry.path().to_str().unwrap(), args)? {
+                dir_data.sub_dirs.push(data);
             }
             continue;
         }
-
-        let mut file = File::open(entry.path())?;
-
-        let mut buffer = String::new();
-        file.read_to_string(&mut buffer)?;
-
-        if args.skip_empty_lines {
-            for line in buffer.lines() {
-                if !line.trim().is_empty() {
-                    lines += 1;
-                    if args.count_chars {
-                        characters += line.chars().count();
-                    }
-                }
-            }
-        } else {
-            lines += buffer.lines().count();
-            if args.count_chars {
-                let _: Vec<_> = buffer
-                    .lines()
-                    .map(|line| characters += line.chars().count())
-                    .collect();
-            }
-        }
-
-        dbg!(characters);
-        println!(
-            "{}> {}: {}",
-            indenting,
-            entry.file_name().to_str().ok_or(Error::FileNameError)?,
-            lines
-        );
-        if lines == 69 {
-            println!("  NICE!");
+        if entry.metadata()?.is_file() {
+            dir_data.file_data.push(get_file_data(
+                entry.path().to_str().unwrap(),
+                args.skip_empty_lines,
+            )?);
         }
     }
-    for dir in maybe_dirs {
-        let (tmp_lines, tmp_characters) = get_dir_lines(
-            dir.path().to_str().ok_or(Error::FileNameError)?,
-            args,
-            depth + 1,
-        )?;
-
-        lines += tmp_lines;
-        characters += tmp_characters;
-    }
-
-    Ok((lines, characters))
+    Ok(Some(dir_data))
 }
