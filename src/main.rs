@@ -67,6 +67,7 @@ fn main() -> Result<()> {
             print_dir(&d_data, &args);
             println!("Total lines: {total}", total = d_data.total_lines());
             println!("Total characters: {total}", total = d_data.total_characters());
+            println!("words: {total}", total = d_data.total_words());
         }
     } else {
         let f_data = get_file_data(&args.file_path, args.skip_empty_lines)?;
@@ -105,6 +106,7 @@ struct FileData {
     file_name: String,
     lines: usize,
     characters: usize,
+    words: usize,
 }
 
 struct DirData {
@@ -129,6 +131,14 @@ impl DirData {
         }
         total
     }
+
+    fn total_words(&self) -> usize {
+        let mut total = 0;
+        for f in &self.file_data {
+            total += f.words;
+        }
+        total
+    }
 }
 
 fn get_file_data(path: impl Into<String>, skip_empty_lines: bool) -> Result<FileData> {
@@ -140,27 +150,38 @@ fn get_file_data(path: impl Into<String>, skip_empty_lines: bool) -> Result<File
 
     let mut lines = 0;
     let mut characters = 0;
+    let mut words = 0;
+    let mut empty_lines = 0;
 
-    if !skip_empty_lines {
-        lines += s.lines().count();
-    } else {
-        for line in s.lines() {
-            if !line.trim().is_empty() {
-                lines += 1;
-            }
+    for line in s.lines() {
+        if !line.trim().is_empty() {
+            lines += 1;
+        } else {
+            empty_lines += 1;
         }
+    }
+    if skip_empty_lines {
+        lines = s.lines().count() - empty_lines
+    } else {
+        lines = s.lines().count();
     }
 
     for char in s.chars() {
         if char != '\n' || char != '\t' {
             characters += 1;
+            if char.is_whitespace() {
+                words += 1;
+            }
         }
     }
+
+    let words = words - empty_lines;
 
     Ok(FileData {
         file_name,
         lines,
         characters,
+        words,
     })
 }
 
