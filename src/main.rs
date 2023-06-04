@@ -174,18 +174,21 @@ fn get_dir_data(dir_path: &str, args: &Args) -> Result<Option<DirData>> {
         return Ok(None);
     }
     for entry in std::fs::read_dir(dir_path).into_iter().flatten() {
-        let Ok(entry) = entry else {
+        let e; 
+        if entry.is_ok() {
+            e = entry.unwrap();
+        } else {
             continue;
-        };
-        if args.recursive && entry.metadata()?.is_dir() {
-            if let Some(data) = get_dir_data(entry.path().to_str().unwrap(), args)? {
+        }
+        if args.recursive && e.metadata()?.is_dir() {
+            if let Some(data) = get_dir_data(e.path().to_str().unwrap(), args)? {
                 dir_data.sub_dirs.push(data);
             }
             continue;
         }
-        if entry.metadata()?.is_file() {
+        if e.metadata()?.is_file() {
             dir_data.file_data.push(get_file_data(
-                entry.path().to_str().unwrap(),
+                e.path().to_str().unwrap(),
                 args.skip_empty_lines,
             )?);
         }
