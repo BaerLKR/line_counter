@@ -21,6 +21,9 @@ struct Args {
     #[clap(short, long, takes_value = false)]
     count_chars: bool,
 
+    #[clap(short, long, takes_value = false)]
+    words: bool,
+
     /// To ignore files completely add a ".ignore.lc" file to the directory and write down the files that should be ignored.
     ignored: Vec<String>,
 }
@@ -79,7 +82,13 @@ fn main() -> Result<()> {
 
 fn print_file(file: &FileData, args: &Args) {
     println!(
-        "{file_name} => {line_count} lines {chars}",
+        "{file_name} => {line_count} lines {chars} {word}",
+        // word = &file.words,
+        word = if args.words {
+            format!("and {} Words", &file.words)
+        } else {
+            "".to_owned()
+        },
         file_name = &file.file_name,
         line_count = file.lines,
         chars = if args.count_chars {
