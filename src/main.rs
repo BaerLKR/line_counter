@@ -69,8 +69,11 @@ fn main() -> Result<()> {
         if let Some(d_data) = get_dir_data(&args.file_path, &args)? {
             print_dir(&d_data, &args);
             println!("Total lines: {total}", total = d_data.total_lines());
-            println!("Total characters: {total}", total = d_data.total_characters());
-            println!("words: {total}", total = d_data.total_words());
+            println!(
+                "Total characters: {total}",
+                total = d_data.total_characters()
+            );
+            println!("Total Words: {total}", total = d_data.total_words());
         }
     } else {
         let f_data = get_file_data(&args.file_path, args.skip_empty_lines)?;
