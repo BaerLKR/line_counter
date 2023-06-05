@@ -21,6 +21,7 @@ struct Args {
     #[clap(short, long, takes_value = false)]
     count_chars: bool,
 
+    /// Prints the wordcount
     #[clap(short, long, takes_value = false)]
     words: bool,
 
@@ -181,7 +182,7 @@ fn get_file_data(path: impl Into<String>, skip_empty_lines: bool) -> Result<File
     for char in s.chars() {
         if char != '\n' || char != '\t' {
             characters += 1;
-            if char.is_whitespace() {
+            if char.is_whitespace() || char.is_ascii_punctuation() || !char.is_alphabetic() {
                 words += 1;
             }
         }
