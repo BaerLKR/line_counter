@@ -21,6 +21,10 @@ struct Args {
     #[clap(short, long, takes_value = false)]
     count_chars: bool,
 
+    /// Prints the wordcount
+    #[clap(short, long, takes_value = false)]
+    words: bool,
+
     /// To ignore files completely add a ".ignore.lc" file to the directory and write down the files that should be ignored.
     ignored: Vec<String>,
 }
@@ -66,7 +70,11 @@ fn main() -> Result<()> {
         if let Some(d_data) = get_dir_data(&args.file_path, &args)? {
             print_dir(&d_data, &args);
             println!("Total lines: {total}", total = d_data.total_lines());
-            println!("Total characters: {total}", total = d_data.total_characters());
+            println!(
+                "Total characters: {total}",
+                total = d_data.total_characters()
+            );
+            println!("Total Words: {total}", total = d_data.total_words());
         }
     } else {
         let f_data = get_file_data(&args.file_path, args.skip_empty_lines)?;
@@ -78,7 +86,13 @@ fn main() -> Result<()> {
 
 fn print_file(file: &FileData, args: &Args) {
     println!(
-        "{file_name} => {line_count} lines {chars}",
+        "{file_name} => {line_count} lines {chars} {word}",
+        // word = &file.words,
+        word = if args.words {
+            format!("and {} Words", &file.words)
+        } else {
+            "".to_owned()
+        },
         file_name = &file.file_name,
         line_count = file.lines,
         chars = if args.count_chars {
@@ -105,6 +119,7 @@ struct FileData {
     file_name: String,
     lines: usize,
     characters: usize,
+    words: usize,
 }
 
 struct DirData {
@@ -129,6 +144,14 @@ impl DirData {
         }
         total
     }
+
+    fn total_words(&self) -> usize {
+        let mut total = 0;
+        for f in &self.file_data {
+            total += f.words;
+        }
+        total
+    }
 }
 
 fn get_file_data(path: impl Into<String>, skip_empty_lines: bool) -> Result<FileData> {
@@ -140,27 +163,38 @@ fn get_file_data(path: impl Into<String>, skip_empty_lines: bool) -> Result<File
 
     let mut lines = 0;
     let mut characters = 0;
+    let mut words = 0;
+    let mut empty_lines = 0;
 
-    if !skip_empty_lines {
-        lines += s.lines().count();
-    } else {
-        for line in s.lines() {
-            if !line.trim().is_empty() {
-                lines += 1;
-            }
+    for line in s.lines() {
+        if !line.trim().is_empty() {
+            lines += 1;
+        } else {
+            empty_lines += 1;
         }
+    }
+    if skip_empty_lines {
+        lines = s.lines().count() - empty_lines
+    } else {
+        lines = s.lines().count();
     }
 
     for char in s.chars() {
         if char != '\n' || char != '\t' {
             characters += 1;
+            if char.is_whitespace() || char.is_ascii_punctuation() || !char.is_alphabetic() {
+                words += 1;
+            }
         }
     }
+
+    let words = words - empty_lines;
 
     Ok(FileData {
         file_name,
         lines,
         characters,
+        words,
     })
 }
 
@@ -174,18 +208,20 @@ fn get_dir_data(dir_path: &str, args: &Args) -> Result<Option<DirData>> {
         return Ok(None);
     }
     for entry in std::fs::read_dir(dir_path).into_iter().flatten() {
-        let Ok(entry) = entry else {
+        let e = if entry.is_ok() {
+            entry.unwrap()
+        } else {
             continue;
         };
-        if args.recursive && entry.metadata()?.is_dir() {
-            if let Some(data) = get_dir_data(entry.path().to_str().unwrap(), args)? {
+        if args.recursive && e.metadata()?.is_dir() {
+            if let Some(data) = get_dir_data(e.path().to_str().unwrap(), args)? {
                 dir_data.sub_dirs.push(data);
             }
             continue;
         }
-        if entry.metadata()?.is_file() {
+        if e.metadata()?.is_file() {
             dir_data.file_data.push(get_file_data(
-                entry.path().to_str().unwrap(),
+                e.path().to_str().unwrap(),
                 args.skip_empty_lines,
             )?);
         }
