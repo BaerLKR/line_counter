@@ -161,23 +161,16 @@ fn get_file_data(path: impl Into<String>, skip_empty_lines: bool) -> Result<File
     let mut s = String::new();
     f.read_to_string(&mut s)?;
 
-    let mut lines = 0;
+    let lines;
     let mut characters = 0;
     let mut words = 0;
-    let mut empty_lines = 0;
+    let empty_lines = s.lines().filter(|l| l.trim().is_empty()).count();
 
-    for line in s.lines() {
-        if !line.trim().is_empty() {
-            lines += 1;
-        } else {
-            empty_lines += 1;
-        }
-    }
-    if skip_empty_lines {
-        lines = s.lines().count() - empty_lines
+    lines = if skip_empty_lines {
+        s.lines().count() - empty_lines
     } else {
-        lines = s.lines().count();
-    }
+        s.lines().count()
+    };
 
     for char in s.chars() {
         if char != '\n' || char != '\t' {
